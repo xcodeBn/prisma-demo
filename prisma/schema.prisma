@@ -27,6 +27,7 @@ model Book {
   title       String
   authorId    String
   publisherId String
+  genres      Genre[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   author      Author    @relation(fields: [authorId], references: [id])
@@ -37,6 +38,14 @@ model Publisher {
   id        String   @id @default(uuid())
   name      String
   book      Book[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Genre {
+  id        String   @id @default(uuid())
+  name      String
+  books     Book[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
