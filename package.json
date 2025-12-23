@@ -20,6 +20,7 @@
   "homepage": "https://github.com/chrisshaddad/onramp-demo-prisma#readme",
   "devDependencies": {
     "@faker-js/faker": "^10.1.0",
+    "@prisma/language-server": "^31.3.4",
     "@types/node": "^25.0.0",
     "prisma": "^7.1.0",
     "tsx": "^4.21.0",
