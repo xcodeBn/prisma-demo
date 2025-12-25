@@ -1,8 +1,10 @@
 import { faker } from "@faker-js/faker";
 import { prisma } from "./lib/prisma";
 
-
-// simpler to edit :)
+/*
+simply edit this to generate db data based on your needs,
+I needed to generate a lot of reviews to test the popular books View properly for example
+*/
 const SEED_CONFIG = {
   genres: 12,
   publishers: 5,
