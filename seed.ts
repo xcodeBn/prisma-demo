@@ -1,59 +1,55 @@
 import { faker } from "@faker-js/faker";
 import { prisma } from "./lib/prisma";
 
-async function main() {
-  console.log("----Starting seed-----");
 
-  // Create genres first
-  console.log("-Creating genres...");
-  const genreNames = [
-    "Fiction",
-    "Non-Fiction",
-    "Science Fiction",
-    "Fantasy",
-    "Mystery",
-    "Thriller",
-    "Romance",
-    "Horror",
-    "Biography",
-    "History",
-    "Self-Help",
-    "Adventure",
-  ];
+// simpler to edit :)
+const SEED_CONFIG = {
+  genres: 12,
+  publishers: 5,
+  authors: 10,
+  booksPerAuthor: { min: 1, max: 3 },
+  genresPerBook: { min: 1, max: 3 },
+  users: 15,
+  reviewsPerUser: { min: 67, max: 76 },
+  ratingRange: { min: 3, max: 5 },
+};
 
+async function seedGenres() {
   const genres = await Promise.all(
-      genreNames.map((name) =>
+      Array.from({ length: SEED_CONFIG.genres }, () =>
           prisma.genre.create({
-            data: { name },
+            data: { name: faker.book.genre() },
           })
       )
   );
 
-  console.log(`✅ Created ${genres.length} genres`);
+  console.log(`Seeded ${genres.length} genres`);
+  return genres;
+}
 
-  // Create publishers
-  console.log("🏢 Creating publishers...");
+async function seedPublishers() {
   const publishers = await Promise.all(
-      Array.from({ length: 5 }, () =>
+      Array.from({ length: SEED_CONFIG.publishers }, () =>
           prisma.publisher.create({
             data: {
-              name: faker.company.name() + " Publishing",
+              name: `${faker.company.name()} Publishing`,
             },
           })
       )
   );
 
-  console.log(`✅ Created ${publishers.length} publishers`);
+  console.log(`Seeded ${publishers.length} publishers`);
+  return publishers;
+}
 
-  // Create authors with books
-  console.log("✍️ Creating authors and books...");
-  const books = [];
+async function seedAuthorsAndBooks(publishers: any[], genres: any[]) {
+  const allBooks = [];
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < SEED_CONFIG.authors; i++) {
     const randomPublisher = faker.helpers.arrayElement(publishers);
     const randomGenres = faker.helpers.arrayElements(
         genres,
-        faker.number.int({ min: 1, max: 3 })
+        faker.number.int(SEED_CONFIG.genresPerBook)
     );
 
     const author = await prisma.author.create({
@@ -62,7 +58,7 @@ async function main() {
         email: faker.internet.email(),
         books: {
           create: Array.from(
-              { length: faker.number.int({ min: 1, max: 3 }) },
+              { length: faker.number.int(SEED_CONFIG.booksPerAuthor) },
               () => ({
                 title: faker.book.title(),
                 publisherId: randomPublisher.id,
@@ -78,15 +74,16 @@ async function main() {
       },
     });
 
-    books.push(...author.books);
-    console.log(`  ✅ Created author: ${author.name} with ${author.books.length} book(s)`);
+    allBooks.push(...author.books);
   }
 
-  console.log(`✅ Created ${books.length} total books`);
+  console.log(`Seeded ${SEED_CONFIG.authors} authors with ${allBooks.length} books`);
+  return allBooks;
+}
 
-
+async function seedUsers() {
   const users = await Promise.all(
-      Array.from({ length: 15 }, (_) => {
+      Array.from({ length: SEED_CONFIG.users }, () => {
         const firstName = faker.person.firstName();
         const lastName = faker.person.lastName();
 
@@ -97,7 +94,9 @@ async function main() {
             password: faker.internet.password(),
             first_name: firstName,
             last_name: lastName,
-            nick_name: faker.helpers.maybe(() => faker.internet.displayName(), { probability: 0.5 }),
+            nick_name: faker.helpers.maybe(() => faker.internet.displayName(), {
+              probability: 0.5,
+            }),
             mfa_enabled: faker.datatype.boolean(),
             dob: faker.date.birthdate({ min: 18, max: 80, mode: "age" }),
           },
@@ -105,15 +104,16 @@ async function main() {
       })
   );
 
-  console.log(`✅ Created ${users.length} users`);
+  console.log(`Seeded ${users.length} users`);
+  return users;
+}
 
-  // Create reviews
-  console.log("⭐ Creating reviews...");
-  let reviewCount = 0;
+async function seedReviews(users: any[], books: any[]) {
+  let successCount = 0;
+  let skipCount = 0;
 
   for (const user of users) {
-    // Each user reviews 3-8 random books
-    const numReviews = faker.number.int({ min: 67, max: 76 });
+    const numReviews = faker.number.int(SEED_CONFIG.reviewsPerUser);
     const booksToReview = faker.helpers.arrayElements(books, numReviews);
 
     for (const book of booksToReview) {
@@ -122,31 +122,44 @@ async function main() {
           data: {
             userId: user.id,
             bookId: book.id,
-            rating: faker.number.float({ min: 3, max: 5, fractionDigits: 1 }),
+            rating: faker.number.float({
+              ...SEED_CONFIG.ratingRange,
+              fractionDigits: 1,
+            }),
             reviewBody: faker.helpers.maybe(
                 () => faker.lorem.paragraph({ min: 1, max: 3 }),
                 { probability: 0.8 }
             ),
           },
         });
-        reviewCount++;
+        successCount++;
       } catch (error) {
-        // Skip if duplicate review (user already reviewed this book)
-        console.log(error);
+        skipCount++;
       }
     }
   }
 
-  console.log(`Created ${reviewCount} reviews`);
-  console.log("\nSeed completed successfully!");
+  console.log(`Seeded ${successCount} reviews (${skipCount} duplicates skipped)`);
+}
+
+async function main() {
+  console.log("Starting database seed...\n");
+
+  const genres = await seedGenres();
+  const publishers = await seedPublishers();
+  const books = await seedAuthorsAndBooks(publishers, genres);
+  const users = await seedUsers();
+  await seedReviews(users, books);
+
+  console.log("\nSeed completed successfully");
 }
 
 main()
     .then(async () => {
       await prisma.$disconnect();
     })
-    .catch(async (e) => {
-      console.error("Seed failed idk why check the error message:", e);
+    .catch(async (error) => {
+      console.error("Seed failed:", error);
       await prisma.$disconnect();
       process.exit(1);
     });
